@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>四則演算ゲーム</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f8ff;
+            flex-direction: column;
+        }
+        #game-container {
+            background-color: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-width: 550px;
+        }
+        h1 {
+            color: #333;
+        }
+        .quiz-container {
+            font-size: 2.8rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .quiz-container select {
+            font-size: 2.2rem;
+            margin: 0 10px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .parentheses-container {
+            margin-top: 15px;
+            font-size: 1.5rem;
+        }
+        .parentheses-container select {
+            font-size: 1.2rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        .buttons { margin-top: 20px; }
+        button {
+            font-size: 1.2rem;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 0 10px;
+            transition: background-color 0.3s;
+        }
+        #check-btn { background-color: #4caf50; color: white; }
+        #check-btn:hover { background-color: #45a049; }
+        #next-btn { background-color: #2196f3; color: white; }
+        #next-btn:hover { background-color: #1e87db; }
+        #feedback {
+            margin-top: 20px;
+            font-size: 1.8rem;
+            font-weight: bold;
+            height: 30px;
+        }
+        .correct { color: #4caf50; }
+        .incorrect { color: #f44336; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>四則演算ゲーム</h1>
+        <div class="quiz-container">
+            <span id="num1"></span>
+            <select id="operator-select-1">
+                <option value="">?</option><option value="+">＋</option><option value="-">－</option><option value="*">×</option><option value="/">÷</option>
+            </select>
+            <span id="num2"></span>
+            <select id="operator-select-2">
+                <option value="">?</option><option value="+">＋</option><option value="-">－</option><option value="*">×</option><option value="/">÷</option>
+            </select>
+            <span id="num3"></span>
+            <span> = </span>
+            <span id="result"></span>
+        </div>
+        <div class="parentheses-container">
+            <label for="parentheses-select"><b>括弧 () は:</b></label>
+            <select id="parentheses-select">
+                <option value="">?</option>
+                <option value="none">必要ない</option>
+                <option value="()">必要</option>
+            </select>
+        </div>
+        <div class="buttons">
+            <button id="check-btn">答え合わせ</button>
+            <button id="next-btn">次の問題</button>
+        </div>
+        <p id="feedback"></p>
+    </div>
+
+    <script>
+        const num1Elem = document.getElementById('num1');
+        const num2Elem = document.getElementById('num2');
+        const num3Elem = document.getElementById('num3');
+        const resultElem = document.getElementById('result');
+        const operatorSelect1 = document.getElementById('operator-select-1');
+        const operatorSelect2 = document.getElementById('operator-select-2');
+        const parenthesesSelect = document.getElementById('parentheses-select');
+        const checkBtn = document.getElementById('check-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const feedbackElem = document.getElementById('feedback');
+
+        let correctOperator1, correctOperator2, correctParentheses;
+        const ALL_OPERATORS = ['+', '-', '*', '/'];
+
+        // MARK: 式を評価するコア関数
+        // (n1, op1, n2, op2, n3) と括弧の有無から答えを計算する
+        // 計算不能な場合はnullを返す
+        function evaluateExpression(n1, n2, n3, op1, op2, useParentheses) {
+            const highPriority = op => op === '*' || op === '/';
+
+            // 不正な割り算をチェック
+            if ((op1 === '/' && n2 === 0) || (op2 === '/' && n3 === 0)) return null;
+            if (useParentheses && op2 === '/' && calculate(n1, op1, n2) === 0) return null;
+
+            let result;
+            if (useParentheses) {
+                const intermediate = calculate(n1, op1, n2);
+                if (!Number.isInteger(intermediate)) return null;
+                result = calculate(intermediate, op2, n3);
+            } else {
+                if (highPriority(op1) && !highPriority(op2)) { // op1が優先
+                    const intermediate = calculate(n1, op1, n2);
+                    if (!Number.isInteger(intermediate)) return null;
+                    result = calculate(intermediate, op2, n3);
+                } else if (!highPriority(op1) && highPriority(op2)) { // op2が優先
+                    const intermediate = calculate(n2, op2, n3);
+                    if (!Number.isInteger(intermediate)) return null;
+                    result = calculate(n1, op1, intermediate);
+                } else { // 優先順位が同じ（両方高い or 両方低い）
+                    const intermediate = calculate(n1, op1, n2);
+                    if (!Number.isInteger(intermediate)) return null;
+                    result = calculate(intermediate, op2, n3);
+                }
+            }
+
+            return Number.isInteger(result) ? result : null;
+        }
+
+        const calculate = (a, op, b) => {
+            if (op === '+') return a + b;
+            if (op === '-') return a - b;
+            if (op === '*') return a * b;
+            if (op === '/') return a / b;
+        };
+
+        const getDivisors = (num) => {
+            const divisors = [];
+            for (let i = 2; i <= num / 2; i++) {
+                if (num % i === 0) divisors.push(i);
+            }
+            return divisors;
+        };
+        
+        function generateQuestion() {
+            while (true) {
+                let n1, n2, n3, op1, op2, useParen, finalResult;
+
+                // --- 問題の構造をランダムに決定 ---
+                const isParenStructure = Math.random() < 0.5;
+
+                if (isParenStructure) {
+                    // (低優先度) 高優先度 の構造を作る -> (a+b)*c
+                    op1 = ALL_OPERATORS[Math.floor(Math.random() * 2)]; // + or -
+                    op2 = ALL_OPERATORS[Math.floor(Math.random() * 2) + 2]; // * or /
+                    useParen = true;
+                } else {
+                    // 高優先度 低優先度 の構造を作る -> a*b+c
+                    op1 = ALL_OPERATORS[Math.floor(Math.random() * 2) + 2]; // * or /
+                    op2 = ALL_OPERATORS[Math.floor(Math.random() * 2)]; // + or -
+                    useParen = false;
+                }
+
+                // --- 構造に合わせて数値を生成 ---
+                try {
+                    if (isParenStructure) {
+                        if (op1 === '+') { n1 = Math.floor(Math.random()*20)+2; n2 = Math.floor(Math.random()*20)+2; }
+                        else { n1 = Math.floor(Math.random()*20)+10; n2 = Math.floor(Math.random()*(n1-1))+1; }
+                        let mid = calculate(n1, op1, n2);
+                        if (op2 === '*') { n3 = Math.floor(Math.random()*8)+2; }
+                        else { const divs = getDivisors(mid); if(divs.length===0) continue; n3 = divs[Math.floor(Math.random()*divs.length)]; }
+                    } else {
+                        if (op1 === '*') { n1 = Math.floor(Math.random()*10)+2; n2 = Math.floor(Math.random()*10)+2; }
+                        else { n2 = Math.floor(Math.random()*9)+2; const quo = Math.floor(Math.random()*10)+2; n1 = n2*quo; }
+                        let mid = calculate(n1, op1, n1);
+                        if (op2 === '+') { n3 = Math.floor(Math.random()*50)+1; }
+                        else { mid = calculate(n1, op1, n2); if(mid<=1) continue; n3 = Math.floor(Math.random()*(mid-1))+1; }
+                    }
+                } catch (e) { continue; }
+                
+                finalResult = evaluateExpression(n1, n2, n3, op1, op2, useParen);
+                
+                if (finalResult === null || finalResult < 0 || finalResult > 250) continue;
+                
+                // MARK: 別解がないかチェックする
+                let uniqueSolutions = 0;
+                for (const p of [true, false]) {
+                    for (const o1 of ALL_OPERATORS) {
+                        for (const o2 of ALL_OPERATORS) {
+                            if (evaluateExpression(n1, n2, n3, o1, o2, p) === finalResult) {
+                                uniqueSolutions++;
+                            }
+                        }
+                    }
+                }
+
+                if (uniqueSolutions > 1) {
+                    continue; // 別解が見つかったので問題を破棄してやり直し
+                }
+
+                // --- 全てのチェックをクリア ---
+                correctOperator1 = op1;
+                correctOperator2 = op2;
+                correctParentheses = useParen ? '()' : 'none';
+                
+                num1Elem.textContent = n1;
+                num2Elem.textContent = n2;
+                num3Elem.textContent = n3;
+                resultElem.textContent = finalResult;
+
+                feedbackElem.textContent = '';
+                operatorSelect1.value = '';
+                operatorSelect2.value = '';
+                parenthesesSelect.value = '';
+                break; // ループを抜ける
+            }
+        }
+        
+        function checkAnswer() {
+            const selectedOp1 = operatorSelect1.value;
+            const selectedOp2 = operatorSelect2.value;
+            const selectedParentheses = parenthesesSelect.value;
+
+            if (selectedOp1 === '' || selectedOp2 === '' || selectedParentheses === '') {
+                alert('演算子と括弧の要否をすべて選択してください！');
+                return;
+            }
+
+            if (selectedOp1 === correctOperator1 && selectedOp2 === correctOperator2 && selectedParentheses === correctParentheses) {
+                feedbackElem.textContent = '大正解！';
+                feedbackElem.className = 'correct';
+            } else {
+                let parenthesesText = correctParentheses === '()' ? '必要' : '不要';
+                feedbackElem.textContent = `残念... 正解は「${correctOperator1}」「${correctOperator2}」で括弧は「${parenthesesText}」でした`;
+                feedbackElem.className = 'incorrect';
+            }
+        }
+
+        checkBtn.addEventListener('click', checkAnswer);
+        nextBtn.addEventListener('click', generateQuestion);
+        
+        generateQuestion();
+    </script>
+
+</body>
+</html>
