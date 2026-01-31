@@ -157,7 +157,8 @@
                     const intermediate = safeCalculate(n2, op2, n3);
                     if (intermediate === null) return null;
                     result = safeCalculate(n1, op1, intermediate);
-                } else { // Both high or both low priority, or same priority (left-to-right)
+                }
+ else { // Both high or both low priority, or same priority (left-to-right)
                     const intermediate = safeCalculate(n1, op1, n2);
                     if (intermediate === null) return null;
                     result = safeCalculate(intermediate, op2, n3);
